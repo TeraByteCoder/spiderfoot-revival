@@ -1711,6 +1711,63 @@ def scanexportdomains():
     )
 
 
+# -- DNS & Email Security Audit (dnschecker) ---------------------------------
+
+@api_bp.route('/dnschecker/run', methods=['POST'])
+def dnschecker_run():
+    """Run DNS/Email Security Audit (MX, SPF, DMARC, DKIM) on all domains of a scan."""
+    scan_id = request.values.get('id', '').strip()
+    if not scan_id:
+        return jsonify({'status': 'error', 'error': 'Scan ID is required'}), 400
+
+    dbh = get_db()
+    scan = dbh.scanInstanceGet(scan_id)
+    if not scan:
+        return jsonify({'status': 'error', 'error': 'Scan not found'}), 404
+
+    from spiderfoot.services.dnschecker_service import run_scan_dnschecker
+
+    data_dir = current_app.config.get('SPIDERFOOT_DATA', '/var/lib/spiderfoot')
+    try:
+        payload = run_scan_dnschecker(dbh, scan_id, data_dir=data_dir)
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'error': str(exc)}), 400
+    except Exception as exc:
+        log.exception("dnschecker run failed for scan %s", scan_id)
+        return jsonify({'status': 'error', 'error': str(exc)}), 500
+
+    return jsonify({
+        'status': 'ok',
+        'scan_id': scan_id,
+        'total_targets': payload['summary']['total_targets'],
+        'risk_counts': payload['summary']['risk_counts'],
+    })
+
+
+@api_bp.route('/dnschecker/report', methods=['GET'])
+def dnschecker_report():
+    """Serve the standalone interactive dnschecker HTML report inline (for new tab view)."""
+    scan_id = request.args.get('id', '').strip()
+    if not scan_id:
+        return Response('Scan ID is required', status=400)
+
+    from spiderfoot.services.dnschecker_service import get_dnschecker_paths
+
+    data_dir = current_app.config.get('SPIDERFOOT_DATA', '/var/lib/spiderfoot')
+    _, html_path = get_dnschecker_paths(scan_id, data_dir=data_dir)
+    if not html_path.exists():
+        return Response('Noch kein DNS/Mail-Check für diesen Scan vorhanden.', status=404)
+
+    return Response(
+        html_path.read_text(encoding='utf-8').encode('utf-8'),
+        mimetype='text/html; charset=utf-8',
+        headers={
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+    )
+
+
 # -- Landing page snapshot view & capture ------------------------------------
 
 @api_bp.route('/landingpage/view', methods=['GET'])

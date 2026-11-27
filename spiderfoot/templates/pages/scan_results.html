@@ -6,9 +6,32 @@
 <div class="max-w-7xl mx-auto" x-data="{
   activeTab: (location.hash.replace('#','') || 'summary'),
   exportOpen: false,
+  dnsChecking: false,
+  dnsError: '',
   setTab(tab) {
     this.activeTab = tab;
     history.replaceState(null, '', '#' + tab);
+  },
+  async runDnsCheck() {
+    if (this.dnsChecking) return;
+    this.dnsChecking = true;
+    this.dnsError = '';
+    try {
+      const resp = await fetch('{{ url_for('api.dnschecker_run') }}?id={{ scan.id }}', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok || data.status !== 'ok') {
+        this.dnsError = data.error || 'DNS-Check fehlgeschlagen';
+        alert(this.dnsError);
+      } else {
+        this.setTab('dnschecker');
+        htmx.ajax('GET', '/frag/results-tab?id={{ scan.id }}&tab=dnschecker', {target: '#tab-content', swap: 'innerHTML'});
+      }
+    } catch (err) {
+      this.dnsError = String(err);
+      alert('DNS-Check Fehler: ' + this.dnsError);
+    } finally {
+      this.dnsChecking = false;
+    }
   }
 }">
 
@@ -84,6 +107,16 @@
             </a>
           </div>
         </div>
+        <button type="button"
+                @click="runDnsCheck()"
+                :disabled="dnsChecking"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded
+                       text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50
+                       hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors cursor-pointer disabled:opacity-50">
+          {{ icons.shield_check(class="w-3.5 h-3.5 mr-1.5") }}
+          <span x-show="!dnsChecking">DNS / Mail Check</span>
+          <span x-show="dnsChecking">Prüfe DNS...</span>
+        </button>
         <button type="button"
                 hx-post="{{ url_for('api.rerunscan') }}"
                 hx-vals='{"id": "{{ scan.id }}"}'
@@ -234,6 +267,24 @@
         {% if landing_pages_data and landing_pages_data.total_pages > 0 %}
         <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-300 font-mono font-bold leading-none">
           {{ landing_pages_data.total_pages }}
+        </span>
+        {% endif %}
+      </button>
+      {# Tab: DNS / Mail Security #}
+      <button
+        @click="setTab('dnschecker')"
+        hx-get="/frag/results-tab?id={{ scan.id }}&tab=dnschecker"
+        hx-target="#tab-content"
+        hx-swap="innerHTML"
+        :class="activeTab === 'dnschecker'
+          ? 'border-b-2 border-sf-accent text-sf-accent'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+        class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
+        {{ icons.shield_check(class="w-4 h-4") }}
+        DNS / Mail
+        {% if dnschecker_data and dnschecker_data.summary %}
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-mono font-bold leading-none">
+          {{ dnschecker_data.summary.total_targets }}
         </span>
         {% endif %}
       </button>

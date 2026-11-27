@@ -400,6 +400,15 @@ def scaninfo():
     except Exception as e:
         log.warning("Could not load landing pages for scan %s: %s", scan_id, e)
 
+    # DNS / Email security audit summary (if already run)
+    dnschecker_data = None
+    try:
+        from spiderfoot.services.dnschecker_service import load_dnschecker_results
+        data_dir = current_app.config.get('SPIDERFOOT_DATA', '/var/lib/spiderfoot')
+        dnschecker_data = load_dnschecker_results(scan_id, data_dir=data_dir)
+    except Exception as e:
+        log.warning("Could not load dnschecker results for scan %s: %s", scan_id, e)
+
     return render_template(
         'pages/scan_results.html',
         page_id='SCANINFO',
@@ -418,6 +427,7 @@ def scaninfo():
         module_count=module_count,
         scan_duration=scan_duration,
         landing_pages_data=landing_pages_data,
+        dnschecker_data=dnschecker_data,
         ai_enabled=ai_enabled,
         default_model=default_model,
         fallback_model=fallback_model,

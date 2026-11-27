@@ -182,6 +182,16 @@ def results_tab():
             pages_data=pages_data,
         )
 
+    elif tab == 'dnschecker':
+        from spiderfoot.services.dnschecker_service import load_dnschecker_results
+        data_dir = current_app.config.get('SPIDERFOOT_DATA', '/var/lib/spiderfoot')
+        dnschecker_data = load_dnschecker_results(scan_id, data_dir=data_dir)
+        return render_template(
+            'fragments/results_dnschecker.html',
+            scan_id=scan_id,
+            dnschecker_data=dnschecker_data,
+        )
+
     elif tab == 'graph':
         return render_template(
             'fragments/results_graph.html',
