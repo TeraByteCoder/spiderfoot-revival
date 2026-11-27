@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 import bcrypt
-from flask import Flask
+from flask import Flask, request
 
 
 def _hash_password(password: str) -> str:
@@ -169,13 +169,26 @@ def create_app(config=None):
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
+
+        # Allow landing page preview views to load external stylesheets, images, and fonts from target sites
+        if request.path.startswith('/api/landingpage/view'):
+            response.headers['Content-Security-Policy'] = (
+                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
+                "img-src * data: blob:; "
+                "style-src * 'unsafe-inline'; "
+                "font-src * data:; "
+                "media-src * data:; "
+                "connect-src *;"
+            )
+            return response
+
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com blob:; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "img-src 'self' data:; "
+            "img-src * data: blob:; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "frame-src 'self'; "
+            "frame-src 'self' blob: data:; "
             "connect-src 'self'"
         )
         return response

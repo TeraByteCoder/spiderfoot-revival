@@ -56,6 +56,7 @@ EVENT_CATEGORIES = {
             'CO_HOSTED_SITE_DOMAIN': 'co-hosted domains',
             'AFFILIATE_INTERNET_NAME': 'affiliate hosts',
             'AFFILIATE_DOMAIN_NAME': 'affiliate domains',
+            'WEB_LANDING_PAGE': 'landing pages',
         },
     },
     'reputation': {

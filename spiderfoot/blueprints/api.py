@@ -11,14 +11,17 @@ import html
 import json
 import logging
 import multiprocessing as mp
+import os
 import re
 import sqlite3
 import string
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from copy import deepcopy
 from io import BytesIO, StringIO
 from operator import itemgetter
+from typing import Any
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
@@ -1277,6 +1280,9 @@ def scancorrelationsexport():
             }
         )
 
+    if filetype.lower() == 'xml':
+        return scanexportxmlmulti()
+
     return jsonify(["ERROR", "Invalid export filetype."])
 
 
@@ -1330,6 +1336,9 @@ def scaneventresultexport():
                 'Pragma': 'no-cache'
             }
         )
+
+    if filetype.lower() == 'xml':
+        return scanexportxmlmulti()
 
     return jsonify(["ERROR", "Invalid export filetype."])
 
@@ -1408,6 +1417,9 @@ def scaneventresultexportmulti():
             }
         )
 
+    if filetype.lower() == 'xml':
+        return scanexportxmlmulti()
+
     return jsonify(["ERROR", "Invalid export filetype."])
 
 
@@ -1462,6 +1474,9 @@ def scansearchresultexport():
                 'Pragma': 'no-cache'
             }
         )
+
+    if filetype.lower() == 'xml':
+        return scanexportxmlmulti()
 
     return jsonify(["ERROR", "Invalid export filetype."])
 
@@ -1519,6 +1534,228 @@ def scanexportjsonmulti():
             'Pragma': 'no-cache'
         }
     )
+
+
+# -- Scan export XML multi ---------------------------------------------------
+
+@api_bp.route('/scanexportxmlmulti', methods=['GET', 'POST'])
+@api_bp.route('/scanexportxml', methods=['GET', 'POST'])
+def scanexportxmlmulti():
+    """Export scan event result data in XML format for multiple scans or single scan."""
+    ids = request.values.get('ids', '')
+    if not ids:
+        ids = request.values.get('id', '')
+
+    if not ids:
+        return Response('Scan ID is required', status=400)
+
+    dbh = get_db()
+    scan_name = ""
+
+    root = ET.Element("spiderfoot", {
+        "version": str(__version__),
+        "generated": time.strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+    def _clean_xml(val: Any) -> str:
+        if val is None:
+            return ""
+        # Remove XML 1.0 illegal control characters
+        return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(val))
+
+    for scan_id in ids.split(','):
+        scan_id = scan_id.strip()
+        if not scan_id:
+            continue
+
+        scan = dbh.scanInstanceGet(scan_id)
+        if scan is None:
+            continue
+
+        scan_name = scan[0]
+        scan_target = scan[1] if len(scan) > 1 else ""
+
+        scan_elem = ET.SubElement(root, "scan", {
+            "id": _clean_xml(scan_id),
+            "name": _clean_xml(scan_name),
+            "target": _clean_xml(scan_target)
+        })
+
+        events_elem = ET.SubElement(scan_elem, "events")
+
+        for row in dbh.scanResultEvent(scan_id):
+            event_type = str(row[4])
+            if event_type == "ROOT":
+                continue
+
+            lastseen = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row[0]))
+            event_data = str(row[1]).replace("<SFURL>", "").replace("</SFURL>", "")
+            source_data = str(row[2])
+            source_module = str(row[3])
+            confidence = str(row[5]) if len(row) > 5 and row[5] is not None else ""
+            visibility = str(row[6]) if len(row) > 6 and row[6] is not None else ""
+            risk = str(row[7]) if len(row) > 7 and row[7] is not None else ""
+            hash_val = str(row[8]) if len(row) > 8 and row[8] is not None else ""
+            false_positive = str(row[13]) if len(row) > 13 and row[13] is not None else "0"
+
+            event_elem = ET.SubElement(events_elem, "event")
+
+            d_el = ET.SubElement(event_elem, "data")
+            d_el.text = _clean_xml(event_data)
+
+            t_el = ET.SubElement(event_elem, "type")
+            t_el.text = _clean_xml(event_type)
+
+            m_el = ET.SubElement(event_elem, "module")
+            m_el.text = _clean_xml(source_module)
+
+            s_el = ET.SubElement(event_elem, "source_data")
+            s_el.text = _clean_xml(source_data)
+
+            fp_el = ET.SubElement(event_elem, "false_positive")
+            fp_el.text = _clean_xml(false_positive)
+
+            ls_el = ET.SubElement(event_elem, "last_seen")
+            ls_el.text = _clean_xml(lastseen)
+
+            if confidence:
+                c_el = ET.SubElement(event_elem, "confidence")
+                c_el.text = _clean_xml(confidence)
+
+            if visibility:
+                v_el = ET.SubElement(event_elem, "visibility")
+                v_el.text = _clean_xml(visibility)
+
+            if risk:
+                r_el = ET.SubElement(event_elem, "risk")
+                r_el.text = _clean_xml(risk)
+
+            if hash_val:
+                h_el = ET.SubElement(event_elem, "hash")
+                h_el.text = _clean_xml(hash_val)
+
+    ET.indent(root, space="  ", level=0)
+    xml_bytes = ET.tostring(root, encoding='utf-8', xml_declaration=True)
+
+    if len(ids.split(',')) > 1 or scan_name == "":
+        fname = "SpiderFoot.xml"
+    else:
+        fname = _safe_filename(scan_name) + "-SpiderFoot.xml"
+
+    return Response(
+        xml_bytes,
+        mimetype='application/xml; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{fname}"',
+            'Pragma': 'no-cache'
+        }
+    )
+
+
+# -- Scan export HTML report -------------------------------------------------
+
+@api_bp.route('/scanexporthtml', methods=['GET', 'POST'])
+def scanexporthtml():
+    """Export complete standalone HTML report with white mode design for a scan."""
+    id = request.values.get('id', '')
+    if not id:
+        return Response('Scan ID is required', status=400)
+
+    dbh = get_db()
+    scan = dbh.scanInstanceGet(id)
+    if not scan:
+        return Response('Scan not found', status=404)
+
+    from spiderfoot.services.html_export_service import generate_scan_html_report
+
+    export_dir = os.path.join(current_app.config.get('SPIDERFOOT_DATA', '/var/lib/spiderfoot'), 'exports')
+    html_content, fname = generate_scan_html_report(dbh, id, export_dir=export_dir)
+
+    return Response(
+        html_content.encode('utf-8'),
+        mimetype='text/html; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{fname}"',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+        }
+    )
+
+
+# -- Landing page snapshot view & capture ------------------------------------
+
+@api_bp.route('/landingpage/view', methods=['GET'])
+def landingpage_view():
+    """Render stored HTML snapshot in an isolated view for iframes with proper base href."""
+    scan_id = request.args.get('id', '')
+    url_hash = request.args.get('hash', '')
+
+    if not scan_id or not url_hash:
+        return Response("Snapshot not found (missing params)", status=404)
+
+    from spiderfoot.services.landingpage_service import get_snapshot_html, get_scan_landing_pages
+    raw_html = get_snapshot_html(scan_id, url_hash)
+
+    if not raw_html:
+        return Response(
+            "<html><body style='font-family:sans-serif;color:#64748b;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;'>"
+            "<p>Snapshot file not available</p></body></html>",
+            status=200,
+            mimetype='text/html; charset=utf-8'
+        )
+
+    # Find the target URL to inject base href so relative assets (CSS, images, fonts) resolve properly
+    base_url = ""
+    try:
+        dbh = get_db()
+        pages_data = get_scan_landing_pages(dbh, scan_id)
+        for p in pages_data.get('all_pages', []):
+            if p.get('hash') == url_hash:
+                base_url = p.get('real_url') or p.get('url') or ''
+                break
+    except Exception:
+        pass
+
+    injected = ""
+    if base_url:
+        injected += f'<base href="{html.escape(base_url, quote=True)}" target="_blank">\n'
+    injected += """<style>
+      /* Ensure scrollbars and body allow miniature scaled rendering */
+      html, body { overflow: auto !important; }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); }
+    </style>\n"""
+
+    if "<head>" in raw_html:
+        raw_html = raw_html.replace("<head>", f"<head>\n{injected}", 1)
+    elif "<HEAD>" in raw_html:
+        raw_html = raw_html.replace("<HEAD>", f"<HEAD>\n{injected}", 1)
+    elif "<html" in raw_html or "<HTML" in raw_html:
+        raw_html = f"<head>{injected}</head>\n{raw_html}"
+    else:
+        raw_html = f"{injected}{raw_html}"
+
+    return Response(
+        raw_html,
+        mimetype='text/html; charset=utf-8',
+        headers={
+            'X-Frame-Options': 'SAMEORIGIN',
+            'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob:; style-src * 'unsafe-inline'; font-src * data:;",
+        }
+    )
+
+
+@api_bp.route('/landingpage/capture', methods=['POST'])
+def landingpage_capture():
+    """Trigger on-demand capture of landing pages for a scan."""
+    scan_id = request.args.get('id', '') or request.values.get('id', '')
+    if not scan_id:
+        return jsonify({'status': 'error', 'message': 'Missing scan ID'}), 400
+
+    dbh = get_db()
+    from spiderfoot.services.landingpage_service import capture_scan_landing_pages
+    result = capture_scan_landing_pages(dbh, scan_id)
+    return jsonify(result)
 
 
 # -- Scan viz ----------------------------------------------------------------

@@ -1,0 +1,284 @@
+{# Landing Pages Tab — Gallery of captured web pages grouped by apex domain #}
+{# scan_id: current scan ID #}
+{# pages_data: dict from landingpage_service.get_scan_landing_pages #}
+
+<div class="p-6 space-y-6" x-data="{
+  searchQuery: '',
+  selectedDomain: '',
+  modalOpen: false,
+  modalPage: null,
+  activeModalTab: 'preview',
+  isCapturing: false,
+  captureMessage: '',
+
+  matchesSearch(page) {
+    if (this.selectedDomain && page.domain !== this.selectedDomain) return false;
+    if (!this.searchQuery) return true;
+    const q = this.searchQuery.toLowerCase();
+    return (page.title || '').toLowerCase().includes(q) ||
+           (page.url || '').toLowerCase().includes(q) ||
+           (page.host || '').toLowerCase().includes(q) ||
+           (page.server || '').toLowerCase().includes(q);
+  },
+
+  openPreview(page) {
+    this.modalPage = page;
+    this.activeModalTab = 'preview';
+    this.modalOpen = true;
+  },
+
+  closePreview() {
+    this.modalOpen = false;
+    this.modalPage = null;
+  },
+
+  triggerCapture() {
+    this.isCapturing = true;
+    this.captureMessage = 'Scanning web targets & capturing landing pages...';
+    fetch('/api/landingpage/capture?id={{ scan_id }}', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        this.isCapturing = false;
+        htmx.ajax('GET', '/frag/results-tab?id={{ scan_id }}&tab=pages', {
+          target: '#tab-content',
+          swap: 'innerHTML'
+        });
+      })
+      .catch(err => {
+        this.isCapturing = false;
+        alert('Failed to capture landing pages: ' + err);
+      });
+  }
+}">
+
+  <!-- Top Controls & Metrics -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-sf-surface border border-slate-200 dark:border-sf-border p-4 rounded-xl shadow-xs">
+    
+    <!-- Metrics -->
+    <div class="flex items-center gap-4 flex-wrap">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Captured Pages</p>
+        <p class="text-2xl font-mono font-bold text-slate-800 dark:text-slate-100">
+          {{ pages_data.total_pages }}
+        </p>
+      </div>
+      <div class="h-8 w-px bg-slate-200 dark:bg-sf-border"></div>
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Domains</p>
+        <p class="text-2xl font-mono font-bold text-cyan-600 dark:text-cyan-400">
+          {{ pages_data.domains_count }}
+        </p>
+      </div>
+      <div class="h-8 w-px bg-slate-200 dark:bg-sf-border"></div>
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Status 200 OK</p>
+        <p class="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400">
+          {{ pages_data.success_count }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Actions & Search -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <div class="relative w-full sm:w-64">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" x-model="searchQuery" placeholder="Search pages, URLs, servers..."
+               class="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-sf-border bg-white dark:bg-sf-elevated text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+      </div>
+
+      <button @click="triggerCapture()" :disabled="isCapturing" type="button"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white transition-colors disabled:opacity-50 shadow-xs cursor-pointer">
+        <svg x-show="!isCapturing" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <svg x-show="isCapturing" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+        <span x-text="isCapturing ? 'Capturing...' : 'Capture Landing Pages'"></span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Domain Filter Chips -->
+  {% if pages_data.groups %}
+  <div class="flex items-center gap-1.5 flex-wrap">
+    <span class="text-xs text-slate-400 mr-1">Filter by Domain:</span>
+    <button @click="selectedDomain = ''"
+            :class="selectedDomain === '' ? 'bg-cyan-600 text-white font-semibold' : 'bg-white dark:bg-sf-surface text-slate-600 dark:text-slate-300 border-slate-200 dark:border-sf-border'"
+            class="text-xs px-2.5 py-1 rounded-full border transition-colors shadow-2xs">
+      All ({{ pages_data.total_pages }})
+    </button>
+    {% for g in pages_data.groups %}
+    <button @click="selectedDomain = '{{ g.domain }}'"
+            :class="selectedDomain === '{{ g.domain }}' ? 'bg-cyan-600 text-white font-semibold' : 'bg-white dark:bg-sf-surface text-slate-600 dark:text-slate-300 border-slate-200 dark:border-sf-border'"
+            class="text-xs px-2.5 py-1 rounded-full border transition-colors shadow-2xs font-mono">
+      {{ g.domain }} <span class="opacity-75">({{ g.count }})</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Main Content: Groups by Oberdomain -->
+  {% if pages_data.groups %}
+  <div class="space-y-8">
+    {% for g in pages_data.groups %}
+    <div x-show="selectedDomain === '' || selectedDomain === '{{ g.domain }}'" class="space-y-3">
+      
+      <!-- Domain Header -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-sf-border">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-md bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-xs font-bold font-mono">
+            🌐
+          </span>
+          <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 font-mono tracking-tight">
+            {{ g.domain }}
+          </h3>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-sf-elevated text-slate-500 font-mono">
+            {{ g.count }} {{ 'page' if g.count == 1 else 'pages' }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Tiles Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {% for page in g.pages %}
+        <div x-show="matchesSearch({{ page | tojson }})"
+             @click="openPreview({{ page | tojson }})"
+             class="group relative bg-white dark:bg-sf-surface border border-slate-200 dark:border-sf-border rounded-xl shadow-xs hover:shadow-md hover:border-cyan-500/50 transition-all cursor-pointer flex flex-col overflow-hidden">
+          
+          <!-- Mock Browser Chrome Header -->
+          <div class="flex items-center justify-between px-3 py-2 bg-slate-100 dark:bg-sf-elevated border-b border-slate-200 dark:border-sf-border text-xs">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-red-400"></span>
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            </div>
+            <span class="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[140px]" title="{{ page.real_url }}">
+              {{ page.host }}
+            </span>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded border {{ page.status_badge }}">
+              {{ page.status_code }}
+            </span>
+          </div>
+
+          <!-- Scaled Iframe Thumbnail Preview -->
+          <div class="relative w-full h-44 bg-slate-50 dark:bg-sf-bg overflow-hidden border-b border-slate-100 dark:border-sf-border flex items-center justify-center">
+            <iframe src="{{ page.view_url }}"
+                    tabindex="-1"
+                    style="position: absolute; top: 0; left: 0; width: 400%; height: 400%; transform: scale(0.25); transform-origin: 0 0; -webkit-transform-origin: 0 0; border: 0; pointer-events: none; background: #ffffff;">
+            </iframe>
+            
+            <!-- Hover Overlay -->
+            <div class="absolute inset-0 bg-cyan-900/10 dark:bg-cyan-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/90 dark:bg-slate-900/90 text-cyan-600 dark:text-cyan-400 shadow-md backdrop-blur-xs flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                Inspect Full Size
+              </span>
+            </div>
+          </div>
+
+          <!-- Card Details Footer -->
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mb-1" title="{{ page.title }}">
+                {{ page.title }}
+              </p>
+              <p class="text-[11px] font-mono text-slate-400 truncate mb-2" title="{{ page.real_url }}">
+                {{ page.real_url }}
+              </p>
+            </div>
+            
+            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-100 dark:border-sf-border/60">
+              <span class="truncate max-w-[120px]">{{ page.server }}</span>
+              <span class="font-mono">{{ page.size }}</span>
+            </div>
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <!-- Empty State -->
+  <div class="bg-white dark:bg-sf-surface border border-slate-200 dark:border-sf-border rounded-xl p-12 text-center">
+    <div class="w-12 h-12 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400 mx-auto flex items-center justify-center text-xl mb-3">
+      🌐
+    </div>
+    <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">No Landing Pages Captured Yet</h3>
+    <p class="text-xs text-slate-500 max-w-md mx-auto mb-4">
+      Click below to automatically scan all discovered links and hostnames in this scan and capture their landing pages!
+    </p>
+    <button @click="triggerCapture()" :disabled="isCapturing" type="button"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold transition-colors cursor-pointer shadow-sm">
+      <span x-text="isCapturing ? 'Capturing Landing Pages...' : 'Capture Landing Pages Now'"></span>
+    </button>
+  </div>
+  {% endif %}
+
+  <!-- Full View Modal ("raufdrücken für gross") -->
+  <div x-show="modalOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+       @keydown.escape.window="closePreview()">
+    
+    <!-- Backdrop -->
+    <div class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs transition-opacity" @click="closePreview()"></div>
+
+    <!-- Modal Box -->
+    <div class="relative bg-white dark:bg-sf-surface border border-slate-200 dark:border-sf-border rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden z-10"
+         @click.stop>
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-sf-border bg-slate-50 dark:bg-sf-elevated">
+        
+        <div class="flex items-center gap-3 min-w-0 flex-1 mr-4">
+          <span class="text-lg">🌐</span>
+          <div class="min-w-0">
+            <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate" x-text="modalPage?.title"></h4>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-[11px] font-mono text-cyan-600 dark:text-cyan-400 truncate" x-text="modalPage?.real_url"></span>
+              <span class="text-[10px] font-bold px-1.5 py-0.2 rounded border" :class="modalPage?.status_badge" x-text="modalPage?.status_label"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls & Close -->
+        <div class="flex items-center gap-2 shrink-0">
+          <a :href="modalPage?.real_url" target="_blank" rel="noopener noreferrer"
+             class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-sf-border bg-white dark:bg-sf-surface text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors">
+            <span>Open Link</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+
+          <button @click="closePreview()" type="button"
+                  class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-sf-border transition-colors text-lg font-bold">
+            &times;
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Modal Body (Iframe Rendered View) -->
+      <div class="flex-1 bg-white dark:bg-slate-950 relative overflow-hidden">
+        <template x-if="modalPage">
+          <iframe :src="modalPage.view_url"
+                  sandbox="allow-same-origin allow-scripts"
+                  class="w-full h-full border-0">
+          </iframe>
+        </template>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-2.5 bg-slate-50 dark:bg-sf-elevated border-t border-slate-200 dark:border-sf-border flex items-center justify-between text-xs text-slate-500 font-mono">
+        <div>
+          <span>Server: <strong class="text-slate-700 dark:text-slate-300" x-text="modalPage?.server"></strong></span>
+          <span class="mx-2">&middot;</span>
+          <span>Domain: <strong class="text-slate-700 dark:text-slate-300" x-text="modalPage?.domain"></strong></span>
+        </div>
+        <div x-text="modalPage?.size"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>

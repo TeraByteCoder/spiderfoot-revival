@@ -392,6 +392,14 @@ def scaninfo():
         cached_models = []
         active_cache = None
 
+    # Landing pages summary
+    landing_pages_data = {'total_pages': 0, 'domains_count': 0, 'groups': [], 'all_pages': []}
+    try:
+        from spiderfoot.services.landingpage_service import get_scan_landing_pages
+        landing_pages_data = get_scan_landing_pages(dbh, scan_id)
+    except Exception as e:
+        log.warning("Could not load landing pages for scan %s: %s", scan_id, e)
+
     return render_template(
         'pages/scan_results.html',
         page_id='SCANINFO',
@@ -409,6 +417,7 @@ def scaninfo():
         low_count=low_count,
         module_count=module_count,
         scan_duration=scan_duration,
+        landing_pages_data=landing_pages_data,
         ai_enabled=ai_enabled,
         default_model=default_model,
         fallback_model=fallback_model,

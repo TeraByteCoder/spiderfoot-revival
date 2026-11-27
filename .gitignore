@@ -109,3 +109,6 @@ tailwindcss-*
 # Superpowers brainstorming files
 .superpowers/
 docs/superpowers/
+
+# Local export artifacts
+exports/

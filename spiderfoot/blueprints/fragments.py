@@ -129,11 +129,20 @@ def results_tab():
 
         categories = categorize_event_summary(event_summary)
 
+        landing_pages_data = None
+        try:
+            from spiderfoot.services.landingpage_service import get_scan_landing_pages
+            landing_pages_data = get_scan_landing_pages(dbh, scan_id)
+        except Exception:
+            pass
+
         return render_template(
             'fragments/results_summary.html',
             findings=findings,
             event_summary=event_summary,
             categories=categories,
+            scan_id=scan_id,
+            landing_pages_data=landing_pages_data,
         )
 
     elif tab == 'data':
@@ -162,6 +171,15 @@ def results_tab():
             event_types=event_types,
             scan_id=scan_id,
             cat_chips=cat_chips,
+        )
+
+    elif tab == 'pages':
+        from spiderfoot.services.landingpage_service import get_scan_landing_pages
+        pages_data = get_scan_landing_pages(dbh, scan_id)
+        return render_template(
+            'fragments/results_pages.html',
+            scan_id=scan_id,
+            pages_data=pages_data,
         )
 
     elif tab == 'graph':

@@ -312,6 +312,7 @@ class SpiderFootDb:
         ['VULNERABILITY_CVE_LOW', 'Vulnerability - CVE Low', 0, 'DESCRIPTOR'],
         ['VULNERABILITY_GENERAL', 'Vulnerability - General', 0, 'DESCRIPTOR'],
         ['WEB_ANALYTICS_ID', 'Web Analytics', 0, 'ENTITY'],
+        ['WEB_LANDING_PAGE', 'Web Landing Page', 1, 'DATA'],
         ['WEBSERVER_BANNER', 'Web Server', 0, 'DATA'],
         ['WEBSERVER_HTTPHEADERS', 'HTTP Headers', 1, 'DATA'],
         ['WEBSERVER_STRANGEHEADER', 'Non-Standard HTTP Header', 0, 'DATA'],
