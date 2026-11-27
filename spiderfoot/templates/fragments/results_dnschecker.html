@@ -5,38 +5,39 @@
   checking: false,
   errorMsg: '',
   toggle(dom) { this.expanded[dom] = !this.expanded[dom]; },
-  async startCheck() {
+  startCheck() {
     if (this.checking) return;
     this.checking = true;
     this.errorMsg = '';
-    try {
-      const csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-      const resp = await fetch('/api/dnschecker/run?id={{ scan_id }}', {
-        method: 'POST',
-        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-      });
-      let data = {};
-      try { data = await resp.json(); } catch (_) {}
-      if (!resp.ok || data.status !== 'ok') {
-        this.errorMsg = data.error || ('Fehler HTTP ' + resp.status);
+    var csrfMeta = document.querySelector('meta[name=csrf-token]');
+    var headers = csrfMeta ? { 'X-CSRF-Token': csrfMeta.content } : {};
+    fetch('/api/dnschecker/run?id={{ scan_id }}', { method: 'POST', headers: headers })
+      .then(function(resp) {
+        return resp.json().catch(function() { return {}; }).then(function(data) {
+          return { ok: resp.ok, status: resp.status, data: data };
+        });
+      })
+      .then(function(res) {
+        if (!res.ok || res.data.status !== 'ok') {
+          this.errorMsg = res.data.error || ('Fehler HTTP ' + res.status);
+          this.checking = false;
+          return;
+        }
+        htmx.ajax('GET', '/frag/results-tab?id={{ scan_id }}&tab=dnschecker', {
+          target: '#tab-content',
+          swap: 'innerHTML'
+        });
+      }.bind(this))
+      .catch(function(err) {
+        this.errorMsg = String(err);
         this.checking = false;
-        return;
-      }
-      htmx.ajax('GET', '/frag/results-tab?id={{ scan_id }}&tab=dnschecker', {
-        target: '#tab-content',
-        swap: 'innerHTML'
-      });
-    } catch (err) {
-      this.errorMsg = String(err);
-      this.checking = false;
-    }
+      }.bind(this));
   }
 }">
   {# Error Banner #}
-  <template x-if="errorMsg">
-    <div class="mb-4 px-4 py-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-xs text-red-700 dark:text-red-300"
-         x-text="errorMsg"></div>
-  </template>
+  <div x-show="errorMsg" style="display:none"
+       class="mb-4 px-4 py-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-xs text-red-700 dark:text-red-300"
+       x-text="errorMsg"></div>
 
   {% if not dnschecker_data %}
   <div class="text-center py-12">
@@ -45,29 +46,29 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
               d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
       </svg>
-      <svg x-show="checking" class="w-6 h-6 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
+      <svg x-show="checking" style="display:none" class="w-6 h-6 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
       </svg>
     </div>
     <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
       <span x-show="!checking">Noch kein DNS &amp; Mail Security Audit durchgeführt</span>
-      <span x-show="checking">DNS &amp; Mail Check läuft...</span>
+      <span x-show="checking" style="display:none">DNS &amp; Mail Check läuft...</span>
     </h3>
     <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-5">
       <span x-show="!checking">Prüft alle in diesem Scan gefundenen Domains &amp; Subdomains auf MX, SPF, DMARC, DKIM und Spoofing-Risiken.</span>
-      <span x-show="checking">MX-, SPF-, DMARC- und DKIM-Einträge werden abgefragt. Je nach Anzahl der Domains kann das kurz dauern...</span>
+      <span x-show="checking" style="display:none">MX-, SPF-, DMARC- und DKIM-Einträge werden abgefragt. Je nach Anzahl der Domains kann das kurz dauern...</span>
     </p>
     <button type="button"
             @click="startCheck()"
             :disabled="checking"
-            class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait">
-      <svg x-show="checking" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-sf-accent hover:bg-cyan-400 text-slate-950 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait">
+      <svg x-show="checking" style="display:none" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
       </svg>
       <span x-show="!checking">DNS &amp; Mail Check starten</span>
-      <span x-show="checking">Prüfung läuft...</span>
+      <span x-show="checking" style="display:none">Prüfung läuft...</span>
     </button>
   </div>
   {% else %}
@@ -100,12 +101,12 @@
               @click="startCheck()"
               :disabled="checking"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-sf-border text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-sf-elevated transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait">
-        <svg x-show="checking" class="w-3.5 h-3.5 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
+        <svg x-show="checking" style="display:none" class="w-3.5 h-3.5 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
         <span x-show="!checking">Neu prüfen</span>
-        <span x-show="checking">Prüfung läuft...</span>
+        <span x-show="checking" style="display:none">Prüfung läuft...</span>
       </button>
     </div>
   </div>
@@ -140,7 +141,7 @@
       {% for level, label in [('all', 'Alle'), ('Kritisch', 'Kritisch'), ('Hoch', 'Hoch'), ('Mittel', 'Mittel'), ('Sicher / Gehärtet', 'Sicher')] %}
       <button type="button"
               @click="riskFilter = '{{ level }}'"
-              :class="riskFilter === '{{ level }}' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-sf-elevated text-slate-600 dark:text-slate-300 border-slate-200 dark:border-sf-border hover:bg-slate-100 dark:hover:bg-sf-surface'"
+              :class="riskFilter === '{{ level }}' ? 'bg-sf-accent text-slate-950 border-sf-accent' : 'bg-white dark:bg-sf-elevated text-slate-600 dark:text-slate-300 border-slate-200 dark:border-sf-border hover:bg-slate-100 dark:hover:bg-sf-surface'"
               class="px-2.5 py-1 text-xs font-medium rounded border transition-colors cursor-pointer">
         {{ label }}
       </button>
@@ -230,6 +231,7 @@
         </tr>
         {% if r.risk_reasons or r.recommendations %}
         <tr x-show="expanded['{{ r.domain }}'] && (riskFilter === 'all' || riskFilter === '{{ r.risk_level }}') && (!search || '{{ r.domain }}'.includes(search.toLowerCase()))"
+            style="display:none"
             class="bg-slate-50/70 dark:bg-sf-elevated/30">
           <td colspan="7" class="px-4 py-3 space-y-2 text-xs">
             {% if r.spf.primary_record %}
