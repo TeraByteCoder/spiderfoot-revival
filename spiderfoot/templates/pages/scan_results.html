@@ -6,36 +6,9 @@
 <div class="max-w-7xl mx-auto" x-data="{
   activeTab: (location.hash.replace('#','') || 'summary'),
   exportOpen: false,
-  dnsChecking: false,
-  dnsError: '',
   setTab(tab) {
     this.activeTab = tab;
     history.replaceState(null, '', '#' + tab);
-  },
-  async runDnsCheck() {
-    if (this.dnsChecking) return;
-    this.dnsChecking = true;
-    this.dnsError = '';
-    try {
-      const csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-      const resp = await fetch('{{ url_for('api.dnschecker_run') }}?id={{ scan.id }}', {
-        method: 'POST',
-        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-      });
-      const data = await resp.json();
-      if (!resp.ok || data.status !== 'ok') {
-        this.dnsError = data.error || 'DNS-Check fehlgeschlagen';
-        alert(this.dnsError);
-      } else {
-        this.setTab('dnschecker');
-        htmx.ajax('GET', '/frag/results-tab?id={{ scan.id }}&tab=dnschecker', {target: '#tab-content', swap: 'innerHTML'});
-      }
-    } catch (err) {
-      this.dnsError = String(err);
-      alert('DNS-Check Fehler: ' + this.dnsError);
-    } finally {
-      this.dnsChecking = false;
-    }
   }
 }">
 
@@ -111,16 +84,6 @@
             </a>
           </div>
         </div>
-        <button type="button"
-                @click="runDnsCheck()"
-                :disabled="dnsChecking"
-                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded
-                       text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50
-                       hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors cursor-pointer disabled:opacity-50">
-          {{ icons.shield_check(class="w-3.5 h-3.5 mr-1.5") }}
-          <span x-show="!dnsChecking">DNS / Mail Check</span>
-          <span x-show="dnsChecking">Prüfe DNS...</span>
-        </button>
         <button type="button"
                 hx-post="{{ url_for('api.rerunscan') }}"
                 hx-vals='{"id": "{{ scan.id }}"}'

@@ -2,26 +2,72 @@
   riskFilter: 'all',
   search: '',
   expanded: {},
-  toggle(dom) { this.expanded[dom] = !this.expanded[dom]; }
+  checking: false,
+  errorMsg: '',
+  toggle(dom) { this.expanded[dom] = !this.expanded[dom]; },
+  async startCheck() {
+    if (this.checking) return;
+    this.checking = true;
+    this.errorMsg = '';
+    try {
+      const csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+      const resp = await fetch('/api/dnschecker/run?id={{ scan_id }}', {
+        method: 'POST',
+        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+      });
+      let data = {};
+      try { data = await resp.json(); } catch (_) {}
+      if (!resp.ok || data.status !== 'ok') {
+        this.errorMsg = data.error || ('Fehler HTTP ' + resp.status);
+        this.checking = false;
+        return;
+      }
+      htmx.ajax('GET', '/frag/results-tab?id={{ scan_id }}&tab=dnschecker', {
+        target: '#tab-content',
+        swap: 'innerHTML'
+      });
+    } catch (err) {
+      this.errorMsg = String(err);
+      this.checking = false;
+    }
+  }
 }">
+  {# Error Banner #}
+  <template x-if="errorMsg">
+    <div class="mb-4 px-4 py-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-xs text-red-700 dark:text-red-300"
+         x-text="errorMsg"></div>
+  </template>
+
   {% if not dnschecker_data %}
   <div class="text-center py-12">
     <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-sf-accent flex items-center justify-center mx-auto mb-3">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg x-show="!checking" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
               d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
       </svg>
+      <svg x-show="checking" class="w-6 h-6 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+      </svg>
     </div>
-    <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">Noch kein DNS &amp; Mail Security Audit durchgeführt</h3>
+    <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
+      <span x-show="!checking">Noch kein DNS &amp; Mail Security Audit durchgeführt</span>
+      <span x-show="checking">DNS &amp; Mail Check läuft...</span>
+    </h3>
     <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-5">
-      Prüft alle in diesem Scan gefundenen Domains &amp; Subdomains auf MX, SPF, DMARC, DKIM und Spoofing-Risiken.
+      <span x-show="!checking">Prüft alle in diesem Scan gefundenen Domains &amp; Subdomains auf MX, SPF, DMARC, DKIM und Spoofing-Risiken.</span>
+      <span x-show="checking">MX-, SPF-, DMARC- und DKIM-Einträge werden abgefragt. Je nach Anzahl der Domains kann das kurz dauern...</span>
     </p>
     <button type="button"
-            @click="runDnsCheck()"
-            :disabled="dnsChecking"
-            class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors cursor-pointer disabled:opacity-50">
-      <span x-show="!dnsChecking">DNS &amp; Mail Check starten</span>
-      <span x-show="dnsChecking">Prüfung läuft...</span>
+            @click="startCheck()"
+            :disabled="checking"
+            class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait">
+      <svg x-show="checking" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+      </svg>
+      <span x-show="!checking">DNS &amp; Mail Check starten</span>
+      <span x-show="checking">Prüfung läuft...</span>
     </button>
   </div>
   {% else %}
@@ -51,11 +97,15 @@
         In neuem Tab öffnen
       </a>
       <button type="button"
-              @click="runDnsCheck()"
-              :disabled="dnsChecking"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-sf-border text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-sf-elevated transition-colors cursor-pointer disabled:opacity-50">
-        <span x-show="!dnsChecking">Neu prüfen</span>
-        <span x-show="dnsChecking">Prüft...</span>
+              @click="startCheck()"
+              :disabled="checking"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-sf-border text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-sf-elevated transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait">
+        <svg x-show="checking" class="w-3.5 h-3.5 animate-spin text-sf-accent" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+        </svg>
+        <span x-show="!checking">Neu prüfen</span>
+        <span x-show="checking">Prüfung läuft...</span>
       </button>
     </div>
   </div>
