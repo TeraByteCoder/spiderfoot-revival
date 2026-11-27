@@ -1,10 +1,22 @@
-# SpiderFoot Revival
+# SpiderFoot Revival (TeraByteCoder Fork)
 
-Self-hosted OSINT automation platform. Forked from [SpiderFoot](https://github.com/smicallef/spiderfoot) with a modernized UI, overhauled module ecosystem, and improved developer experience.
+Self-hosted OSINT automation platform. Forked from [boredchilada/spiderfoot-revival](https://github.com/boredchilada/spiderfoot-revival) (originally [SpiderFoot](https://github.com/smicallef/spiderfoot)) with a modernized UI, overhauled module ecosystem, and custom OSINT/security extensions.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.9+-green)](https://www.python.org)
 [![Version](https://img.shields.io/badge/version-5.2.0-blue.svg)](CHANGELOG.md)
+
+## Custom Extensions in This Fork
+
+- **DNS & Email Security Auditor (`dnschecker` / `sfp_dnschecker`)**:
+  - Audits MX, SPF, DMARC (including root-domain policy inheritance), and DKIM selectors for all discovered domains & subdomains and scores email spoofing risk (`Kritisch`, `Hoch`, `Mittel`, `Sicher / Gehärtet`).
+  - Available **both** as a scan module (`sfp_dnschecker`) emitting `DNS_SPF`, `DNS_TEXT`, `RAW_DNS_RECORDS`, and `VULNERABILITY_GENERAL` events, **and** on-demand for any existing scan in the **DNS / Mail** tab (`POST /api/dnschecker/run`).
+  - Includes a standalone interactive HTML report that opens in a new browser tab (`/api/dnschecker/report?id=<scan_id>`).
+- **Alphabetical Domain & Subdomain List Export**:
+  - **Export Domains (.txt)** in the scan results Export menu (`/api/scanexportdomains?id=<scan_id>`) exports a deduplicated, alphabetically sorted, newline-separated list of all discovered domains and subdomains.
+- **Landing Page Renderer (`sfp_landingpage`) & Standalone HTML Report**:
+  - Captures and previews rendered HTML landing pages grouped by apex domain in the **Pages** tab.
+  - **Export HTML Report** (`/api/scanexporthtml?id=<scan_id>`) generates a standalone white-mode scan report.
 
 ## What Changed from Upstream
 
@@ -20,8 +32,10 @@ Self-hosted OSINT automation platform. Forked from [SpiderFoot](https://github.c
 ### Docker (recommended)
 
 ```bash
+git clone https://github.com/TeraByteCoder/spiderfoot-revival.git
+cd spiderfoot-revival
 docker build -t spiderfoot-revival .
-docker run -p 5001:5001 spiderfoot-revival
+docker run -d --name spiderfoot --restart unless-stopped -p 5001:5001 -v ~/.spiderfoot:/var/lib/spiderfoot spiderfoot-revival
 ```
 
 Visit [http://localhost:5001](http://localhost:5001)
