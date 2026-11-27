@@ -1682,6 +1682,35 @@ def scanexporthtml():
     )
 
 
+# -- Scan export domain tree -------------------------------------------------
+
+@api_bp.route('/scanexportdomaintree', methods=['GET', 'POST'])
+def scanexportdomaintree():
+    """Export discovered domains and subdomains as an alphabetical newline-separated tree."""
+    id = request.values.get('id', '')
+    if not id:
+        return Response('Scan ID is required', status=400)
+
+    dbh = get_db()
+    scan = dbh.scanInstanceGet(id)
+    if not scan:
+        return Response('Scan not found', status=404)
+
+    from spiderfoot.services.domain_export_service import generate_domain_tree_export
+
+    tree_text, fname = generate_domain_tree_export(dbh, id)
+
+    return Response(
+        tree_text.encode('utf-8'),
+        mimetype='text/plain; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{fname}"',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+        }
+    )
+
+
 # -- Landing page snapshot view & capture ------------------------------------
 
 @api_bp.route('/landingpage/view', methods=['GET'])
