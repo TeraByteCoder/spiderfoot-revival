@@ -1682,11 +1682,11 @@ def scanexporthtml():
     )
 
 
-# -- Scan export domain tree -------------------------------------------------
+# -- Scan export domain list -------------------------------------------------
 
-@api_bp.route('/scanexportdomaintree', methods=['GET', 'POST'])
-def scanexportdomaintree():
-    """Export discovered domains and subdomains as an alphabetical newline-separated tree."""
+@api_bp.route('/scanexportdomains', methods=['GET', 'POST'])
+def scanexportdomains():
+    """Export discovered domains and subdomains as an alphabetical newline-separated list."""
     id = request.values.get('id', '')
     if not id:
         return Response('Scan ID is required', status=400)
@@ -1696,12 +1696,12 @@ def scanexportdomaintree():
     if not scan:
         return Response('Scan not found', status=404)
 
-    from spiderfoot.services.domain_export_service import generate_domain_tree_export
+    from spiderfoot.services.domain_export_service import generate_domain_list_export
 
-    tree_text, fname = generate_domain_tree_export(dbh, id)
+    list_text, fname = generate_domain_list_export(dbh, id)
 
     return Response(
-        tree_text.encode('utf-8'),
+        list_text.encode('utf-8'),
         mimetype='text/plain; charset=utf-8',
         headers={
             'Content-Disposition': f'attachment; filename="{fname}"',

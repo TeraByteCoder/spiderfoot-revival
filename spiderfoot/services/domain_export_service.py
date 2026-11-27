@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Service for exporting discovered domains and subdomains as an alphabetical tree."""
+"""Service for exporting discovered domains and subdomains as an alphabetical list."""
 
 import re
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Iterable, Optional, Set, Tuple
 
 DOMAIN_EVENT_TYPES = frozenset({
     'DOMAIN_NAME',
@@ -46,66 +46,20 @@ def extract_domains_from_events(rows: Iterable[Any]) -> Set[str]:
     return domains
 
 
-def _find_parent_domain(domain: str, domain_set: Set[str]) -> Optional[str]:
-    """Find the longest existing ancestor domain in domain_set, or None if root."""
-    parts = domain.split('.')
-    for i in range(1, len(parts) - 1):
-        candidate = '.'.join(parts[i:])
-        if candidate in domain_set:
-            return candidate
-    return None
-
-
-def build_domain_tree(domains: Iterable[str]) -> Tuple[List[str], Dict[str, List[str]]]:
-    """Build an alphabetically sorted adjacency list (roots, children_map) for domains."""
-    domain_set = {d for d in (_clean_domain(x) for x in domains) if d}
-    children_map: Dict[str, List[str]] = {d: [] for d in domain_set}
-    roots: List[str] = []
-
-    for domain in sorted(domain_set):
-        parent = _find_parent_domain(domain, domain_set)
-        if parent is not None:
-            children_map[parent].append(domain)
-        else:
-            roots.append(domain)
-
-    roots.sort()
-    for parent in children_map:
-        children_map[parent].sort()
-
-    return roots, children_map
-
-
-def format_domain_tree(domains: Iterable[str]) -> str:
-    """Format domains and subdomains as an alphabetically sorted, newline-separated tree."""
-    roots, children_map = build_domain_tree(domains)
-    if not roots:
+def format_domain_list(domains: Iterable[str]) -> str:
+    """Format unique domains and subdomains as an alphabetically sorted, newline-separated list."""
+    cleaned = sorted({d for d in (_clean_domain(x) for x in domains) if d})
+    if not cleaned:
         return ''
-
-    lines: List[str] = []
-
-    def _walk(node: str, prefix: str) -> None:
-        children = children_map.get(node, [])
-        for idx, child in enumerate(children):
-            is_last = idx == len(children) - 1
-            connector = '└── ' if is_last else '├── '
-            lines.append(f'{prefix}{connector}{child}')
-            next_prefix = f'{prefix}{"    " if is_last else "│   "}'
-            _walk(child, next_prefix)
-
-    for root in roots:
-        lines.append(root)
-        _walk(root, '')
-
-    return '\n'.join(lines) + '\n'
+    return '\n'.join(cleaned) + '\n'
 
 
-def generate_domain_tree_export(dbh: Any, scan_id: str) -> Tuple[str, str]:
-    """Generate the domain tree text export and filename for a scan."""
+def generate_domain_list_export(dbh: Any, scan_id: str) -> Tuple[str, str]:
+    """Generate the domain list text export and filename for a scan."""
     scan = dbh.scanInstanceGet(scan_id)
     scan_name = scan[0] if scan else 'SpiderFoot'
     rows = dbh.scanResultEvent(scan_id) or []
     domains = extract_domains_from_events(rows)
-    tree_text = format_domain_tree(domains)
-    fname = f'{_safe_filename(scan_name)}-domains-tree.txt'
-    return tree_text, fname
+    list_text = format_domain_list(domains)
+    fname = f'{_safe_filename(scan_name)}-domains.txt'
+    return list_text, fname
